@@ -32,7 +32,6 @@ from urlparse import urlparse
 
 log = logging.getLogger(__name__)
 
-
 def _no_permissions(context, msg):
     user = context['user']
     return {'success': False, 'msg': msg.format(user=user)}
@@ -183,3 +182,21 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         # Add this plugin's templates dir to CKAN's extra_template_paths, so
         # that CKAN will use this plugin's custom templates.
         plugins.toolkit.add_template_directory(config, 'templates')
+
+    # Since OAuth2Plugin already implements IAuthenticator, 
+    # if a logout() function is added to this class, it will be called on logout.
+    def logout(self):
+        user_name = None
+        environ = toolkit.request.environ
+        if 'repoze.who.identity' in environ:
+            user_name = environ['repoze.who.identity']['repoze.who.userid']
+
+        log.debug('Trying to logout user %s in keycloak...' % user_name)
+        
+        if user_name:
+            try:
+                self.oauth2helper.close_session(user_name)
+            except Exception:
+                log.warn('Failed to logout user %s in keycloak!' % user_name)
+        else:
+            log.warn('No token stored for user %s' % user_name)

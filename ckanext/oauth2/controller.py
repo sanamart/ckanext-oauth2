@@ -60,8 +60,8 @@ class OAuth2Controller(base.BaseController):
             self.oauth2helper.remember(user_name)
             self.oauth2helper.update_token(user_name, token)
             self.oauth2helper.redirect_from_callback()
+        
         except Exception as e:
-
             session.save()
 
             # If the callback is called with an error, we must show the message

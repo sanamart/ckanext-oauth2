@@ -33,6 +33,7 @@ from base64 import b64encode, b64decode
 from ckan.plugins import toolkit
 from oauthlib.oauth2 import InsecureTransportError
 import requests
+from urlparse import urlparse, parse_qs
 from requests_oauthlib import OAuth2Session
 import six
 
@@ -69,6 +70,7 @@ class OAuth2Helper(object):
         self.authorization_endpoint = six.text_type(os.environ.get('CKAN_OAUTH2_AUTHORIZATION_ENDPOINT', toolkit.config.get('ckan.oauth2.authorization_endpoint', ''))).strip()
         self.token_endpoint = six.text_type(os.environ.get('CKAN_OAUTH2_TOKEN_ENDPOINT', toolkit.config.get('ckan.oauth2.token_endpoint', ''))).strip()
         self.profile_api_url = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_URL', toolkit.config.get('ckan.oauth2.profile_api_url', ''))).strip()
+        self.end_session_endpoint = six.text_type(os.environ.get('CKAN_OAUTH2_END_SESSION_ENDPOINT', toolkit.config.get('ckan.oauth2.end_session_endpoint', ''))).strip()
         self.client_id = six.text_type(os.environ.get('CKAN_OAUTH2_CLIENT_ID', toolkit.config.get('ckan.oauth2.client_id', ''))).strip()
         self.client_secret = six.text_type(os.environ.get('CKAN_OAUTH2_CLIENT_SECRET', toolkit.config.get('ckan.oauth2.client_secret', ''))).strip()
         self.scope = six.text_type(os.environ.get('CKAN_OAUTH2_SCOPE', toolkit.config.get('ckan.oauth2.scope', ''))).strip()
@@ -115,24 +117,23 @@ class OAuth2Helper(object):
             )
 
         try:
+            data = {'grant_type': 'authorization_code'}
             token = oauth.fetch_token(self.token_endpoint,
-                                      headers=headers,
+                                      data=data,
+                                      client_id=self.client_id,
                                       client_secret=self.client_secret,
-                                      authorization_response=toolkit.request.url,
-                                      verify=self.verify_https)
+                                      username=self.profile_api_user_field,
+                                      authorization_response=toolkit.request.url)
         except requests.exceptions.SSLError as e:
             # TODO search a better way to detect invalid certificates
             if "verify failed" in six.text_type(e):
                 raise InsecureTransportError()
             else:
                 raise
-
         return token
 
     def identify(self, token):
-
         if self.jwt_enable:
-
             access_token = bytes(token['access_token'])
             user_data = jwt.decode(access_token, verify=False)
             user = self.user_json(user_data)
@@ -269,5 +270,17 @@ class OAuth2Helper(object):
             self.update_token(user_name, token)
             log.info('Token for user %s has been updated properly' % user_name)
             return token
+        else:
+            log.warn('User %s has no refresh token' % user_name)
+
+    def close_session(self, user_name):
+        
+        token = self.get_stored_token(user_name)
+        if token:
+            data = {'refresh_token':token['refresh_token'],
+            'client_id':self.client_id,
+            'client_secret':self.client_secret}
+            
+            requests.post(url = self.end_session_endpoint, data = data)
         else:
             log.warn('User %s has no refresh token' % user_name)

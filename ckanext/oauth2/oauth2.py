@@ -33,7 +33,6 @@ from base64 import b64encode, b64decode
 from ckan.plugins import toolkit
 from oauthlib.oauth2 import InsecureTransportError
 import requests
-from urlparse import urlparse, parse_qs
 from requests_oauthlib import OAuth2Session
 import six
 
